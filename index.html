@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cube Coach</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 2 21 7v10l-9 5-9-5V7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M3 7l9 5 9-5M12 12v10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      </svg>
+      <div>
+        <h1>Cube Coach</h1>
+        <p>Learn to solve a Rubik's Cube, one step at a time</p>
+      </div>
+      <label class="method-pick">Cube
+        <select id="skinSelect" aria-label="Cube style"></select>
+      </label>
+      <label class="method-pick method-pick-next">Method
+        <select id="methodSelect" aria-label="Solving method"></select>
+      </label>
+    </div>
+  </header>
+
+  <main class="layout">
+    <nav id="lessonNav" class="lesson-nav" aria-label="Lessons"></nav>
+
+    <section class="cube-area">
+      <div class="status-bar">
+        <span id="stageLabel" class="stage-label"></span>
+        <span class="status-right">
+          <span id="moveCount" class="move-count"></span>
+          <button id="wideBtn" class="wide-btn" aria-pressed="false" title="Hide the lessons so the cube gets the whole width">⤢ Bigger cube</button>
+        </span>
+      </div>
+      <div id="viewBar" class="view-bar" role="group" aria-label="Camera view">
+        <button class="vbtn" data-view="iso">3D</button>
+        <button class="vbtn" data-view="isoUnder">3D under</button>
+        <button class="vbtn" data-view="front">Front</button>
+        <button class="vbtn" data-view="back">Back</button>
+        <button class="vbtn" data-view="left">Left</button>
+        <button class="vbtn" data-view="right">Right</button>
+        <button class="vbtn" data-view="top">Top</button>
+        <button class="vbtn" data-view="bottom">Bottom</button>
+      </div>
+      <p class="view-hint"><span id="viewHint"></span>
+        <label id="mainViewPick" class="main-pick" hidden>Main view
+          <select id="mainViewSelect" aria-label="Main view"></select>
+        </label>
+      </p>
+      <div id="colorBar" class="color-bar" role="group" aria-label="Colors to show">
+        <span class="color-bar-label">Colors</span>
+        <button class="cbtn all" data-color="">All</button>
+        <button class="cbtn" data-color="w" title="White"><i style="background:var(--c-w)"></i>White</button>
+        <button class="cbtn" data-color="y" title="Yellow"><i style="background:var(--c-y)"></i>Yellow</button>
+        <button class="cbtn" data-color="g" title="Green"><i style="background:var(--c-g)"></i>Green</button>
+        <button class="cbtn" data-color="b" title="Blue"><i style="background:var(--c-b)"></i>Blue</button>
+        <button class="cbtn" data-color="o" title="Orange"><i style="background:var(--c-o)"></i>Orange</button>
+        <button class="cbtn" data-color="r" title="Red"><i style="background:var(--c-r)"></i>Red</button>
+      </div>
+      <div id="views" class="views"></div>
+      <p id="scrambleText" class="scramble-text"></p>
+      <div class="toolbar">
+        <button class="btn" id="scrambleBtn">Scramble</button>
+        <button class="btn" id="resetBtn">Reset</button>
+        <button class="btn" id="undoBtn">Undo</button>
+        <label class="speed" title="Turn sound. Picking one plays a sample.">🔊 <select id="soundSelect" aria-label="Turn sound"></select></label>
+        <label class="speed">Speed <input id="speed" type="range" min="100" max="620" value="440"></label>
+      </div>
+      <div id="moveGrid" class="move-grid" aria-label="Moves"></div>
+      <p class="kbd-help">Keyboard: <kbd>U</kbd> <kbd>D</kbd> <kbd>R</kbd> <kbd>L</kbd> <kbd>F</kbd> <kbd>B</kbd> <kbd>M</kbd> <kbd>E</kbd> <kbd>S</kbd> <kbd>X</kbd> <kbd>Y</kbd> <kbd>Z</kbd> · hold <kbd>Shift</kbd> for prime (′) · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo</p>
+    </section>
+
+    <aside id="lessonPanel" class="lesson-panel"></aside>
+  </main>
+
+  <!-- Top-face shapes for the yellow-cross lesson -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <g id="grid9">
+        <rect x="1" y="1" width="28" height="28" rx="3" fill="#333"/>
+        <g fill="#888">
+          <rect x="2.5" y="2.5" width="8" height="8" rx="1.5"/><rect x="11" y="2.5" width="8" height="8" rx="1.5"/><rect x="19.5" y="2.5" width="8" height="8" rx="1.5"/>
+          <rect x="2.5" y="11" width="8" height="8" rx="1.5"/><rect x="19.5" y="11" width="8" height="8" rx="1.5"/>
+          <rect x="2.5" y="19.5" width="8" height="8" rx="1.5"/><rect x="11" y="19.5" width="8" height="8" rx="1.5"/><rect x="19.5" y="19.5" width="8" height="8" rx="1.5"/>
+        </g>
+        <rect x="11" y="11" width="8" height="8" rx="1.5" fill="#ffd500"/>
+      </g>
+      <g id="shape-dot"><use href="#grid9"/></g>
+      <g id="shape-L"><use href="#grid9"/><g fill="#ffd500"><rect x="11" y="2.5" width="8" height="8" rx="1.5"/><rect x="2.5" y="11" width="8" height="8" rx="1.5"/></g></g>
+      <g id="shape-line"><use href="#grid9"/><g fill="#ffd500"><rect x="2.5" y="11" width="8" height="8" rx="1.5"/><rect x="19.5" y="11" width="8" height="8" rx="1.5"/></g></g>
+      <g id="shape-cross"><use href="#grid9"/><g fill="#ffd500"><rect x="11" y="2.5" width="8" height="8" rx="1.5"/><rect x="2.5" y="11" width="8" height="8" rx="1.5"/><rect x="19.5" y="11" width="8" height="8" rx="1.5"/><rect x="11" y="19.5" width="8" height="8" rx="1.5"/></g></g>
+    </defs>
+  </svg>
+
+  <script src="js/cube.js"></script>
+  <script src="js/coach.js"></script>
+  <script src="js/lessons.js"></script>
+  <script src="js/skins.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/methods.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
