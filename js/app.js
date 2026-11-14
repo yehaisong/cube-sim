@@ -92,7 +92,7 @@
   function makePane(name) {
     const sceneEl = document.createElement('div');
     sceneEl.className = 'scene';
-    sceneEl.title = 'Drag to look around · double-click to reset this view';
+    sceneEl.title = 'Drag to turn the cube any way, all the way round · flick to spin · double-click to reset this view';
     const label = document.createElement('span');
     label.className = 'pane-label';
     const cubeEl = document.createElement('div');
@@ -106,24 +106,37 @@
     mainBtn.addEventListener('dblclick', e => e.stopPropagation());
     mainBtn.addEventListener('click', () => makeMain(name));
     sceneEl.append(label, mainBtn, cubeEl);
-    const pane = { name, sceneEl, cubeEl, label, faces: buildFaces(cubeEl), view: { rx: VIEWS[name].rx, ry: VIEWS[name].ry } };
+    const pane = { name, sceneEl, cubeEl, label, faces: buildFaces(cubeEl), m: viewMatrix(VIEWS[name]), spin: null };
     setLabel(pane, false);
     applyView(pane);
 
+    // Free 360° turning: each drag step turns the cube around the screen's own
+    // axes, so it rolls the way your finger moves however it's already turned.
+    // Let go while moving and it keeps spinning, slowing down gently.
     let drag = null;
     sceneEl.addEventListener('pointerdown', e => {
-      drag = { x: e.clientX, y: e.clientY, ...pane.view };
+      stopSpin(pane);
+      drag = { x: e.clientX, y: e.clientY, t: performance.now(), vx: 0, vy: 0 };
       cubeEl.classList.remove('glide');
       sceneEl.setPointerCapture(e.pointerId);
     });
     sceneEl.addEventListener('pointermove', e => {
       if (!drag) return;
-      pane.view.ry = drag.ry + (e.clientX - drag.x) * 0.5;
-      pane.view.rx = Math.max(-90, Math.min(90, drag.rx - (e.clientY - drag.y) * 0.5));
-      applyView(pane);
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      const now = performance.now(), dt = Math.max(1, now - drag.t);
+      // Smoothed speed in pixels per ms, for the spin after letting go.
+      drag.vx = drag.vx * 0.6 + (dx / dt) * 0.4;
+      drag.vy = drag.vy * 0.6 + (dy / dt) * 0.4;
+      Object.assign(drag, { x: e.clientX, y: e.clientY, t: now });
+      turnBy(pane, dx * DRAG_DEG, dy * DRAG_DEG);
       setLabel(pane, true);
     });
-    const endDrag = () => { drag = null; };
+    const endDrag = () => {
+      if (!drag) return;
+      const fresh = performance.now() - drag.t < 60; // finger still moving when lifted
+      if (fresh && Math.hypot(drag.vx, drag.vy) > 0.15) startSpin(pane, drag.vx * DRAG_DEG * 16, drag.vy * DRAG_DEG * 16);
+      drag = null;
+    };
     sceneEl.addEventListener('pointerup', endDrag);
     sceneEl.addEventListener('pointercancel', endDrag);
     sceneEl.addEventListener('dblclick', () => glideTo(pane, pane.name));
@@ -131,14 +144,67 @@
     return pane;
   }
 
-  const applyView = p => { p.cubeEl.style.transform = `rotateX(${p.view.rx}deg) rotateY(${p.view.ry}deg)`; };
+  // ---- Camera rotation as a 3×3 matrix (row-major, CSS axes: y points down) ----
+
+  const DRAG_DEG = 0.5; // degrees per pixel dragged
+  const RAD = Math.PI / 180;
+  const rotX = d => { const c = Math.cos(d * RAD), s = Math.sin(d * RAD); return [1, 0, 0, 0, c, -s, 0, s, c]; };
+  const rotY = d => { const c = Math.cos(d * RAD), s = Math.sin(d * RAD); return [c, 0, s, 0, 1, 0, -s, 0, c]; };
+  const mul = (A, B) => {
+    const out = new Array(9);
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+      out[r * 3 + c] = A[r * 3] * B[c] + A[r * 3 + 1] * B[3 + c] + A[r * 3 + 2] * B[6 + c];
+    }
+    return out;
+  };
+  // Same as the CSS "rotateX(rx) rotateY(ry)" the preset views are described with.
+  const viewMatrix = v => mul(rotX(v.rx), rotY(v.ry));
+
+  // Keep the matrix a clean rotation; tiny rounding errors would build up over a long drag.
+  function orthonormalize(m) {
+    const a = [m[0], m[3], m[6]], b = [m[1], m[4], m[7]];
+    const na = Math.hypot(...a); a.forEach((v, i) => { a[i] = v / na; });
+    const d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    b.forEach((v, i) => { b[i] = v - d * a[i]; });
+    const nb = Math.hypot(...b); b.forEach((v, i) => { b[i] = v / nb; });
+    const c = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    return [a[0], b[0], c[0], a[1], b[1], c[1], a[2], b[2], c[2]];
+  }
+
+  // Turn around the screen's vertical axis (drag sideways) and horizontal axis (drag up/down).
+  function turnBy(p, degX, degY) {
+    p.m = orthonormalize(mul(rotX(-degY), mul(rotY(degX), p.m)));
+    applyView(p);
+  }
+
+  function startSpin(p, vx, vy) {
+    let last = performance.now();
+    const frame = now => {
+      const k = Math.min(3, (now - last) / 16.7); // frames elapsed, steady at any refresh rate
+      last = now;
+      turnBy(p, vx * k, vy * k);
+      const decay = Math.pow(0.94, k);
+      vx *= decay; vy *= decay;
+      p.spin = Math.hypot(vx, vy) > 0.05 ? requestAnimationFrame(frame) : null;
+    };
+    p.spin = requestAnimationFrame(frame);
+  }
+  function stopSpin(p) {
+    if (p.spin) cancelAnimationFrame(p.spin);
+    p.spin = null;
+  }
+
+  // CSS matrix3d is column-major.
+  const applyView = p => {
+    const m = p.m;
+    p.cubeEl.style.transform = `matrix3d(${m[0]},${m[3]},${m[6]},0,${m[1]},${m[4]},${m[7]},0,${m[2]},${m[5]},${m[8]},0,0,0,0,1)`;
+  };
   const setLabel = (p, moved) => { p.label.textContent = VIEWS[p.name].label + (moved ? ' (moved)' : ''); };
 
+  // Glide back to a preset view; the browser blends the two rotations the short way round.
   function glideTo(pane, name) {
-    const target = VIEWS[name];
-    // Spin the short way round, however far the user has dragged.
-    const dy = ((target.ry - pane.view.ry) % 360 + 540) % 360 - 180;
-    pane.view = { rx: target.rx, ry: pane.view.ry + dy };
+    stopSpin(pane);
+    pane.m = viewMatrix(VIEWS[name]);
     pane.cubeEl.classList.add('glide');
     applyView(pane);
     setLabel(pane, false);
