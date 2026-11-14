@@ -48,6 +48,12 @@
         <button class="vbtn" data-view="bottom">Bottom</button>
       </div>
       <p class="view-hint"><span id="viewHint"></span>
+        <label class="main-pick" title="Free: roll the cube any way, all the way round. Top stays up: spin like a turntable and tilt up to 90°.">Turning
+          <select id="turningSelect" aria-label="How dragging turns the cube">
+            <option value="free">Free 360°</option>
+            <option value="limited">Top stays up</option>
+          </select>
+        </label>
         <label id="mainViewPick" class="main-pick" hidden>Main view
           <select id="mainViewSelect" aria-label="Main view"></select>
         </label>

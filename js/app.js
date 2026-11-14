@@ -106,7 +106,7 @@
     mainBtn.addEventListener('dblclick', e => e.stopPropagation());
     mainBtn.addEventListener('click', () => makeMain(name));
     sceneEl.append(label, mainBtn, cubeEl);
-    const pane = { name, sceneEl, cubeEl, label, faces: buildFaces(cubeEl), m: viewMatrix(VIEWS[name]), spin: null };
+    const pane = { name, sceneEl, cubeEl, label, faces: buildFaces(cubeEl), m: viewMatrix(VIEWS[name]), ang: { rx: VIEWS[name].rx, ry: VIEWS[name].ry }, spin: null };
     setLabel(pane, false);
     applyView(pane);
 
@@ -171,10 +171,42 @@
     return [a[0], b[0], c[0], a[1], b[1], c[1], a[2], b[2], c[2]];
   }
 
-  // Turn around the screen's vertical axis (drag sideways) and horizontal axis (drag up/down).
+  // Two ways to turn the camera:
+  //   free    – roll the cube any way, all the way round (screen-axis rotation)
+  //   limited – the top stays up: spin around the cube's own vertical axis and
+  //             tilt at most 90° up or down, like a turntable
+  let turning = 'free';
+  try { if (localStorage.getItem('cube-coach-turning') === 'limited') turning = 'limited'; } catch (e) { /* storage unavailable */ }
+
+  // Read the turntable angles back out of a matrix (exact when there's no roll).
+  const anglesOf = m => ({ rx: Math.atan2(m[7], m[4]) / RAD, ry: Math.atan2(m[2], m[0]) / RAD });
+
   function turnBy(p, degX, degY) {
-    p.m = orthonormalize(mul(rotX(-degY), mul(rotY(degX), p.m)));
+    if (turning === 'limited') {
+      p.ang.ry += degX;
+      p.ang.rx = Math.max(-90, Math.min(90, p.ang.rx - degY));
+      p.m = viewMatrix(p.ang);
+    } else {
+      p.m = orthonormalize(mul(rotX(-degY), mul(rotY(degX), p.m)));
+    }
     applyView(p);
+  }
+
+  function setTurning(mode) {
+    turning = mode === 'limited' ? 'limited' : 'free';
+    try { localStorage.setItem('cube-coach-turning', turning); } catch (e) { /* storage unavailable */ }
+    $('#turningSelect').value = turning;
+    if (turning === 'limited') {
+      // Straighten any roll so the top points up again, keeping the same general direction.
+      for (const p of panes) {
+        stopSpin(p);
+        const a = anglesOf(p.m);
+        p.ang = { rx: Math.max(-90, Math.min(90, a.rx)), ry: a.ry };
+        p.m = viewMatrix(p.ang);
+        p.cubeEl.classList.add('glide');
+        applyView(p);
+      }
+    }
   }
 
   function startSpin(p, vx, vy) {
@@ -204,7 +236,8 @@
   // Glide back to a preset view; the browser blends the two rotations the short way round.
   function glideTo(pane, name) {
     stopSpin(pane);
-    pane.m = viewMatrix(VIEWS[name]);
+    pane.ang = { rx: VIEWS[name].rx, ry: VIEWS[name].ry };
+    pane.m = viewMatrix(pane.ang);
     pane.cubeEl.classList.add('glide');
     applyView(pane);
     setLabel(pane, false);
@@ -749,6 +782,8 @@
     if (Array.isArray(v) && v.length && v.length <= MAX_VIEWS && v.every(n => VIEWS[n])) savedViews = v;
   } catch (e) { /* storage unavailable or bad data */ }
   setViews(savedViews);
+  $('#turningSelect').addEventListener('change', e => setTurning(e.target.value));
+  setTurning(turning);
   let savedFocus = [];
   try {
     const f = JSON.parse(localStorage.getItem('cube-coach-focus'));
